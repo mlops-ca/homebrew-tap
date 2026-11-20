@@ -1,0 +1,47 @@
+name: tests
+
+# Audits and tests the formula on Linux and macOS: brew audit --strict, brew install, brew test.
+# The notarx release workflow pushes Formula/notarxctl.rb; until the first stable release the
+# directory is empty and the job only reports that.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  formula:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: Homebrew/actions/setup-homebrew@61cb4f206b442f05f5efe126f3e7d48218f0da02 # master
+      - name: Look for the formula
+        id: formula
+        run: |
+          if ls Formula/*.rb >/dev/null 2>&1; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::no formula yet: the first stable notarx release adds Formula/notarxctl.rb"
+          fi
+      - name: Style
+        if: steps.formula.outputs.present == 'true'
+        run: brew style Formula
+      - name: Audit
+        if: steps.formula.outputs.present == 'true'
+        run: brew audit --strict --online "$GITHUB_REPOSITORY_OWNER/tap/notarxctl"
+      - name: Install
+        if: steps.formula.outputs.present == 'true'
+        run: brew install --verbose "$GITHUB_REPOSITORY_OWNER/tap/notarxctl"
+      - name: Test
+        if: steps.formula.outputs.present == 'true'
+        run: brew test "$GITHUB_REPOSITORY_OWNER/tap/notarxctl"
